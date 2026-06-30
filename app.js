@@ -220,6 +220,16 @@
     tx('analyses', 'readonly').get(STATE.analyseId).onsuccess = function (ev) {
       var a = ev.target.result;
       if (!a.scenarios) a.scenarios = [];
+      // migration douce: ancien modèle {libelle,source} -> {nom,facteurs[]}
+      a.scenarios.forEach(function (s) {
+        if (!s.facteurs && s.libelle) {
+          s.nom = s.libelle;
+          s.facteurs = [{ libelle: s.libelle, source: s.source || 'autre' }];
+          delete s.libelle; delete s.source;
+        }
+        if (!s.facteurs) s.facteurs = [];
+        if (!s.nom) s.nom = '(sans nom)';
+      });
       getAll('catalogue', function (cat) {
         var actifs = cat.filter(function (c) { return c.actif; });
         var h = '<header class="hd"><button class="btn-ic" id="back">‹</button>'
@@ -242,9 +252,14 @@
         a.scenarios.forEach(function (s, idx) {
           var svI = severite(s.p_initial, s.i_initial);
           var svR = severite(s.p_residuel, s.i_residuel);
+          var facs = (s.facteurs || []).map(function (f) { return esc(f.libelle); }).join(' · ');
           h += '<div class="scn">'
-            + '<div class="scn-h"><span class="scn-t">' + esc(s.libelle) + '</span>'
-            + '<button class="btn-ic danger" data-rm="' + idx + '" title="Retirer">×</button></div>';
+            + '<div class="scn-h"><span class="scn-t">' + esc(s.nom) + '</span>'
+            + '<span class="scn-btns">'
+            + '<button class="btn-ic" data-edit="' + idx + '" title="Modifier facteurs">✎</button>'
+            + '<button class="btn-ic danger" data-rm="' + idx + '" title="Retirer">×</button>'
+            + '</span></div>';
+          if (facs) h += '<div class="scn-fac">' + facs + '</div>';
           // initial
           h += '<div class="cot"><span class="cot-l">Initial</span>'
             + selP('pi_' + idx, s.p_initial) + selI('ii_' + idx, s.i_initial, s.p_initial)
@@ -261,18 +276,7 @@
         });
         h += '</div>';
 
-        // ajout depuis catalogue
-        h += '<details class="add"><summary>+ Ajouter un scénario</summary>';
-        ['humain_orga', 'environnement'].forEach(function (fam) {
-          var items = actifs.filter(function (c) { return c.famille === fam; });
-          h += '<div class="add-fam">' + esc(FAMILLES[fam]) + '</div>';
-          items.forEach(function (c) {
-            h += '<button class="add-it" data-add="' + c.id + '" data-lib="' + esc(c.libelle) + '">' + esc(c.libelle) + '</button>';
-          });
-        });
-        h += '<div class="add-fam">Autre</div>'
-          + '<div class="add-other"><input id="otherInput" placeholder="Décrire un scénario hors liste…"><button class="btn" id="addOther">Ajouter</button></div>';
-        h += '</details>';
+        h += '<div class="bar"><button class="btn primary block" id="newScn">+ Ajouter un scénario</button></div>';
 
         root.innerHTML = h;
 
@@ -298,22 +302,78 @@
           n.onclick = function () { var i = parseInt(n.getAttribute('data-rm'), 10);
             if (confirm('Retirer ce scénario ?')) { a.scenarios.splice(i, 1); saveScn(); renderScenarios(root); } };
         });
-        Array.prototype.forEach.call(root.querySelectorAll('[data-add]'), function (n) {
-          n.onclick = function () {
-            a.scenarios.push(newScn(n.getAttribute('data-add'), n.getAttribute('data-lib')));
-            saveScn(); renderScenarios(root);
-          };
+        Array.prototype.forEach.call(root.querySelectorAll('[data-edit]'), function (n) {
+          n.onclick = function () { openScnForm(root, a, actifs, parseInt(n.getAttribute('data-edit'), 10)); };
         });
-        el('addOther').onclick = function () {
-          var v = el('otherInput').value.trim(); if (!v) return;
-          a.scenarios.push(newScn('autre', v)); saveScn(); renderScenarios(root);
-        };
+        el('newScn').onclick = function () { openScnForm(root, a, actifs, null); };
       });
     };
   }
 
-  function newScn(source, lib) {
-    return { libelle: lib, source: source, p_initial: '', i_initial: '', mesures_proba: '', mesures_impact: '', p_residuel: '', i_residuel: '' };
+  /* ---------- Formulaire scénario (création / édition) ---------- */
+  function openScnForm(root, a, actifs, idx) {
+    var editing = (idx != null);
+    var s = editing ? a.scenarios[idx] : { nom: '', facteurs: [] };
+    // facteurs sélectionnés : set de libellés (snapshots)
+    var sel = {};
+    (s.facteurs || []).forEach(function (f) { sel[f.libelle] = f; });
+
+    function draw() {
+      var h = '<header class="hd"><button class="btn-ic" id="fBack">‹</button>'
+        + '<h1>' + (editing ? 'Modifier le scénario' : 'Nouveau scénario') + '</h1></header>';
+      h += '<div class="form">';
+      h += '<label class="fl">Nom du scénario *<input id="scnNom" type="text" value="' + esc(s.nom) + '" placeholder="ex. Glissade au franchissement du col"></label>';
+      h += '<div class="fl">Facteurs déclencheurs * (au moins un)</div>';
+      ['humain_orga', 'environnement'].forEach(function (fam) {
+        h += '<details class="add" open><summary>' + esc(FAMILLES[fam]) + '</summary>';
+        actifs.filter(function (c) { return c.famille === fam; }).forEach(function (c) {
+          var on = sel.hasOwnProperty(c.libelle);
+          h += '<label class="chk"><input type="checkbox" data-fac="' + esc(c.libelle) + '" data-src="' + c.id + '"' + (on ? ' checked' : '') + '> ' + esc(c.libelle) + '</label>';
+        });
+        h += '</details>';
+      });
+      // facteurs "Autre" déjà attachés (source autre) + ajout libre
+      var autres = Object.keys(sel).filter(function (k) { return sel[k].source === 'autre'; });
+      h += '<details class="add" open><summary>Autre</summary>';
+      autres.forEach(function (k) {
+        h += '<label class="chk"><input type="checkbox" data-fac="' + esc(k) + '" data-src="autre" checked> ' + esc(k) + '</label>';
+      });
+      h += '<div class="add-other"><input id="facOther" placeholder="Facteur hors liste…"><button class="btn" id="facAdd">+</button></div>';
+      h += '</details>';
+      h += '<button class="btn primary block" id="scnSave">' + (editing ? 'Enregistrer' : 'Créer le scénario') + '</button>';
+      h += '</div>';
+      root.innerHTML = h;
+
+      el('fBack').onclick = function () { renderScenarios(root); };
+      // checkbox toggles
+      Array.prototype.forEach.call(root.querySelectorAll('[data-fac]'), function (n) {
+        n.onchange = function () {
+          var lib = n.getAttribute('data-fac'), src = n.getAttribute('data-src');
+          if (n.checked) sel[lib] = { libelle: lib, source: src === 'autre' ? 'autre' : parseInt(src, 10) };
+          else delete sel[lib];
+        };
+      });
+      el('facAdd').onclick = function () {
+        var v = el('facOther').value.trim(); if (!v) return;
+        sel[v] = { libelle: v, source: 'autre' };
+        draw(); // redraw to show the new "Autre" checkbox checked
+      };
+      el('scnSave').onclick = function () {
+        var nom = el('scnNom').value.trim();
+        if (!nom) { alert('Le nom du scénario est obligatoire.'); return; }
+        var facteurs = Object.keys(sel).map(function (k) { return sel[k]; });
+        if (facteurs.length === 0) { alert('Sélectionne au moins un facteur déclencheur.'); return; }
+        if (editing) {
+          s.nom = nom; s.facteurs = facteurs;
+        } else {
+          a.scenarios.push({ nom: nom, facteurs: facteurs, p_initial: '', i_initial: '',
+            mesures_proba: '', mesures_impact: '', p_residuel: '', i_residuel: '' });
+        }
+        a.modifie_le = nowISO();
+        put('analyses', a, function () { renderScenarios(root); });
+      };
+    }
+    draw();
   }
   function chip(coul, n) { return '<span class="chip ' + coul + '">' + (n || 0) + '</span>'; }
 

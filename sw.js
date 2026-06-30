@@ -1,4 +1,4 @@
-var CACHE = 'risque-v1';
+var CACHE = 'risque-v2';
 var ASSETS = [
   './',
   './index.html',
