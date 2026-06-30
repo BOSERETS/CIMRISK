@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d2733">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Analyse de Risque Terrain</title>
+<style>
+:root{
+  --bg:#10161e; --panel:#1d2733; --panel2:#26323f; --line:#37485a;
+  --txt:#eef3f8; --txt2:#9fb1c4; --accent:#3f88c5;
+  --vert:#2e7d32; --jaune:#c9a227; --orange:#d8741c; --rouge:#c0392b; --gris:#56657a;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--txt);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:16px;line-height:1.4}
+#app{max-width:680px;margin:0 auto;padding:0 0 40px;min-height:100vh}
+.hd{display:flex;align-items:center;gap:10px;padding:14px 14px;position:sticky;top:0;
+  background:var(--panel);border-bottom:1px solid var(--line);z-index:5}
+.hd h1{font-size:18px;margin:0;flex:1;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar{padding:12px 14px;display:flex;gap:10px;flex-wrap:wrap}
+.btn{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:10px;
+  padding:11px 14px;font-size:15px;cursor:pointer}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn.ghost{background:transparent}
+.btn.block{width:100%;margin-top:8px}
+.btn-ic{background:transparent;color:var(--txt);border:none;font-size:20px;width:40px;height:40px;
+  border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none}
+.btn-ic:active{background:var(--panel2)}
+.btn-ic.danger{color:#e88}
+.empty,.note{color:var(--txt2);padding:24px 16px;text-align:center}
+.note{padding:10px 16px;font-size:13px;text-align:left}
+
+.list{list-style:none;margin:0;padding:0 14px}
+.card{display:flex;align-items:center;background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;margin-bottom:10px;overflow:hidden}
+.card-main{flex:1;padding:14px;cursor:pointer;min-width:0}
+.card-t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-s{color:var(--txt2);font-size:13px;margin-top:3px}
+.card-act{display:flex;padding-right:6px}
+
+.form{padding:14px}
+.fl{display:block;margin-bottom:14px;color:var(--txt2);font-size:13px}
+.fl input,.fl textarea{width:100%;margin-top:6px;background:var(--panel);color:var(--txt);
+  border:1px solid var(--line);border-radius:9px;padding:11px;font-size:15px;font-family:inherit}
+.fl.sm{margin-bottom:10px}
+textarea{resize:vertical}
+
+.synth{display:flex;align-items:center;gap:6px;padding:10px 14px;flex-wrap:wrap}
+.synth-l{color:var(--txt2);font-size:12px;margin-left:4px}
+.chip{min-width:30px;text-align:center;padding:4px 8px;border-radius:8px;font-weight:700;color:#fff;font-size:13px}
+
+.scn-list{padding:6px 14px}
+.scn{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:12px;padding:12px}
+.scn-h{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px}
+.scn-t{flex:1;font-weight:600}
+.cot{display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap}
+.cot-l{color:var(--txt2);font-size:12px;width:54px;flex:none}
+.sel{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:15px}
+.sel:disabled{opacity:.4}
+.sev{padding:5px 10px;border-radius:8px;font-weight:700;color:#fff;font-size:13px;margin-left:auto}
+.mes{margin-top:8px;padding-top:10px;border-top:1px dashed var(--line)}
+.mes.hidden{display:none}
+
+.vert{background:var(--vert)} .jaune{background:var(--jaune)} .orange{background:var(--orange)}
+.rouge{background:var(--rouge)} .gris{background:var(--gris)}
+
+.add{margin:6px 14px 0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px 12px}
+.add summary{padding:10px 0;cursor:pointer;font-weight:600;color:var(--accent)}
+.add-fam{color:var(--txt2);font-size:12px;text-transform:uppercase;letter-spacing:.4px;margin:10px 0 6px}
+.add-it{display:block;width:100%;text-align:left;background:var(--panel2);color:var(--txt);
+  border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-bottom:6px;cursor:pointer;font-size:14px}
+.add-other{display:flex;gap:8px;margin:6px 0 12px}
+.add-other input{flex:1;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:9px}
+
+.cat-fam{color:var(--txt2);font-size:12px;text-transform:uppercase;letter-spacing:.4px;padding:14px 14px 6px}
+.cat-it{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.cat-it.off{opacity:.5}
+.cat-lib{flex:1;font-size:14px}
+.cat-add{display:flex;gap:8px;padding:10px 14px}
+.cat-add input{flex:1;background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:9px}
+
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="app.js"></script>
+</body>
+</html>
